@@ -129,22 +129,18 @@ class CorosClient:
           "Accept":       "application/json, text/plain, */*",
           "accesstoken": self.accessToken,
        }
-       try:
-          get_activity_download_url_response = self.req.request(
+       get_activity_download_url_response = self.req.request(
               method = 'POST',
               url=get_activity_download_url,
               headers=headers
           )
-          get_activity_download_url_response_json = json.loads(get_activity_download_url_response.data)
-          download_url = get_activity_download_url_response_json['data']['fileUrl']
-          return self.req.request(
-              method = 'GET',
-              url=download_url,
-              headers=headers
-          )
-       except Exception as err:
-            exit() 
-       pass
+       get_activity_download_url_response_json = json.loads(get_activity_download_url_response.data)
+       download_url = get_activity_download_url_response_json['data']['fileUrl']
+       return self.req.request(
+          method = 'GET',
+          url=download_url,
+          headers=headers
+      )
 
     ## 检查token是否有效
     def checkToken(self):

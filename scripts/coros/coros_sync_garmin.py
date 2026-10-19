@@ -1,9 +1,12 @@
 import os
-import sys 
+import sys
+import zipfile
+import io
 
-CURRENT_DIR = os.path.split(os.path.abspath(__file__))[0]  # 当前目录
-config_path = CURRENT_DIR.rsplit('/', 1)[0]  # 上三级目录
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))  # scripts/coros/
+config_path = os.path.dirname(CURRENT_DIR)                # scripts/
 sys.path.append(config_path)
+sys.path.append(CURRENT_DIR)
 
 from coros_client import CorosClient
 from config  import DB_DIR, COROS_FIT_DIR
@@ -74,15 +77,31 @@ if __name__ == "__main__":
       id = un_sync["id"]
       sport_type = un_sync["sportType"]
       file = corosClient.downloadActivitie(id, sport_type)
-      file_path = os.path.join(COROS_FIT_DIR, f"{id}.fit")
-      with open(file_path, "wb") as fb:
-          fb.write(file.data)
-      upload_status = garminClient.upload_activity(file_path)
-      print(f"{id}.fit upload status {upload_status}")
+      raw = file.data
+      buf = io.BytesIO(raw)
+      if zipfile.is_zipfile(buf):
+        buf.seek(0)
+        with zipfile.ZipFile(buf) as zf:
+          fit_names = [n for n in zf.namelist() if n.endswith('.fit')]
+          statuses = []
+          for fit_name in fit_names:
+            fit_path = os.path.join(COROS_FIT_DIR, f"{id}-{os.path.basename(fit_name)}")
+            with open(fit_path, "wb") as fb:
+              fb.write(zf.read(fit_name))
+            s = garminClient.upload_activity(fit_path)
+            print(f"{fit_name} upload status {s}")
+            statuses.append(s)
+          upload_status = "SUCCESS" if any(s == "SUCCESS" for s in statuses) else statuses[0] if statuses else "UPLOAD_EXCEPTION"
+      else:
+        file_path = os.path.join(COROS_FIT_DIR, f"{id}.fit")
+        with open(file_path, "wb") as fb:
+          fb.write(raw)
+        upload_status = garminClient.upload_activity(file_path)
+        print(f"{id}.fit upload status {upload_status}")
       if upload_status in ("SUCCESS", "DUPLICATE_ACTIVITY"):
         coros_db.updateSyncStatus(id)
       
     except Exception as err:
       print(err)
-      coros_db.updateExceptionSyncStatus(un_sync)
-      exit()
+      coros_db.updateExceptionSyncStatus(id)
+  # exit()

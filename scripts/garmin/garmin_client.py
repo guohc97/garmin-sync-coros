@@ -11,6 +11,30 @@ from .garmin_url_dict import GARMIN_URL_DICT
 logger = logging.getLogger(__name__)
 
 
+def is_duplicate_activity(detailed_import_result):
+  """Return whether Garmin's import response reports a duplicate activity."""
+  if not isinstance(detailed_import_result, dict):
+    return False
+
+  failures = detailed_import_result.get("failures")
+  if not isinstance(failures, list):
+    return False
+
+  for failure in failures:
+    if not isinstance(failure, dict):
+      continue
+    messages = failure.get("messages")
+    if not isinstance(messages, list):
+      continue
+    if any(
+        isinstance(message, dict)
+        and message.get("content") == "Duplicate Activity."
+        for message in messages
+    ):
+      return True
+  return False
+
+
 class GarminClient:
   def __init__(self, email, password, auth_domain, newest_num):
         self.auth_domain = auth_domain
@@ -106,6 +130,7 @@ class GarminClient:
     )
 
     if allowed_file_extension:
+       status = "UPLOAD_EXCEPTION"
        try:
         with open(activity_path, 'rb') as file:
           file_data = file.read()
@@ -119,14 +144,25 @@ class GarminClient:
           response = requests.post(upload_url, headers=self.headers, files=fields)
           res_code = response.status_code
           result = response.json()
-          uploadId =  result.get("detailedImportResult").get('uploadId')
+          detailed_import_result = (
+              result.get("detailedImportResult")
+              if isinstance(result, dict)
+              else None
+          )
+          uploadId = (
+              detailed_import_result.get("uploadId")
+              if isinstance(detailed_import_result, dict)
+              else None
+          )
           isDuplicateUpload = uploadId == None or uploadId == ''
           if res_code == 202 and not isDuplicateUpload:
               status = "SUCCESS"
-          elif res_code == 409 and result.get("detailedImportResult").get("failures")[0].get('messages')[0].get('content') == "Duplicate Activity.":
-              status = "DUPLICATE_ACTIVITY" 
+          elif res_code == 409 and is_duplicate_activity(detailed_import_result):
+              status = "DUPLICATE_ACTIVITY"
+          else:
+              print(f"  -> HTTP {res_code}: {result}")
        except Exception as e:
-            print(e)
+            print(f"  -> exception: {e}")
             status = "UPLOAD_EXCEPTION"
        finally:
             return status

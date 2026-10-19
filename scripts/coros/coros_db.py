@@ -23,7 +23,7 @@ class CorosDB:
               db.execute('insert into coros_activity (activity_id, sport_type) values (?,?)', (id,sport_type)) 
     
     def getUnSyncActivity(self):
-        select_un_upload_sql = 'SELECT activity_id,sport_type FROM coros_activity WHERE is_sync_garmin = 0 limit 1000'
+        select_un_upload_sql = 'SELECT activity_id,sport_type FROM coros_activity WHERE is_sync_garmin IN (0, 2) limit 1000'
         with SqliteDB(self._coros_db_name) as db:
             un_upload_result = db.execute(select_un_upload_sql).fetchall()
             query_size = len(un_upload_result)
